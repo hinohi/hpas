@@ -32,6 +32,7 @@ const ATTACK_RANGE: u32 = 128;
 pub struct Arena {
     p1: Bernoulli,
     p2: Uniform<u32>,
+    p3: Uniform<u32>,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -45,6 +46,7 @@ impl Arena {
         Arena {
             p1: Bernoulli::new(0.5).unwrap(),
             p2: Uniform::new_inclusive(ATTACK_FACTOR - ATTACK_RANGE, ATTACK_FACTOR + ATTACK_RANGE),
+            p3: Uniform::new_inclusive(0, 99),
         }
     }
 
@@ -55,6 +57,8 @@ impl Arena {
     pub fn battle<R: Rng>(&self, random: &mut R, a: Agent, b: Agent) -> WhichAgent {
         let mut a_hp = a.hp;
         let mut b_hp = b.hp;
+        let a_speed_gain = a.speed.saturating_sub(b.speed);
+        let b_speed_gain = b.speed.saturating_sub(a.speed);
         let mut a_count = a.speed;
         let mut b_count = b.speed;
         loop {
@@ -71,11 +75,15 @@ impl Arena {
             };
             match which {
                 WhichAgent::A => {
-                    b_hp = b_hp.saturating_sub(self.damage(random, a.attack));
+                    if b_speed_gain == 0 || a_speed_gain < self.p3.sample(random) {
+                        b_hp = b_hp.saturating_sub(self.damage(random, a.attack));
+                    }
                     b_count += b.speed;
                 }
                 WhichAgent::B => {
-                    a_hp = a_hp.saturating_sub(self.damage(random, b.attack));
+                    if a_speed_gain == 0 || a_speed_gain < self.p3.sample(random) {
+                        a_hp = a_hp.saturating_sub(self.damage(random, b.attack));
+                    }
                     a_count += a.speed;
                 }
             }
@@ -102,13 +110,15 @@ fn main() {
         args.next().unwrap().parse().unwrap(),
         args.next().unwrap().parse().unwrap(),
     );
-    println!("{:?}", a);
-    println!("{:?}", b);
-    let n = args.next().unwrap_or("10000".to_string()).parse().unwrap();
+    let n = args
+        .next()
+        .unwrap_or("1000000".to_string())
+        .parse()
+        .unwrap();
     let mut win = [0, 0];
     for _ in 0..n {
         let result = arena.battle(&mut random, a, b);
         win[result as usize] += 1;
     }
-    println!("{:?}", win);
+    println!("{} {}", win[0], win[1]);
 }
